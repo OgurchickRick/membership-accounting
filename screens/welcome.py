@@ -1,33 +1,77 @@
-from kivy.uix.screenmanager import Screen, SlideTransition
-from kivyauth.utils import auto_login, login_providers
-from kivyauth.google_auth import initialize_google, login_google
+import gspread
+import os
+from kivy.uix.screenmanager import Screen
 
 
-GOOGLE_CLIENT_ID = "1039821075002-km4ku6n5t3kk1h5aq33hi4rs7a1b33l0.apps.googleusercontent.com"
-GOOGLE_CLIENT_SECRET = "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"
+from pydrive.auth import GoogleAuth
+from pydrive.drive import GoogleDrive
 
 
 class Welcome(Screen):
-    current_provider = ""
+    def login_and_create_folder(self):
+        if os.path.getsize('credentials.json') == 0:
+            gauth = GoogleAuth()
+            gauth.LocalWebserverAuth()
+            drive = GoogleDrive(gauth)
 
-    def on_start(self):
-        if auto_login(login_providers.google):
-            self.current_provider = login_providers.google
+            folder_metadata = {
+                'title': 'membership-accounting',
+                'mimeType': 'application/vnd.google-apps.folder'
+            }
 
-    def login(self):
-        initialize_google(self.after_login, self.error_listener, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)
+            folder = drive.CreateFile(folder_metadata)
+            folder.Upload()
+            folder_id = folder['id']
+            emaill = folder['lastModifyingUser']['emailAddress']
+            file = drive.CreateFile({'parents': [{'id': f'{folder_id}'}],
+                                     'title': f'{emaill}',
+                                     'mimeType': 'application/vnd.google-apps.spreadsheet'})
 
-    def gl_login(self, *args):
-        login_google()
-        self.current_provider = login_providers.google
+            file.Upload()
+            file_id = file['id']
 
-        self.show_login_progress()
+            permission = file.InsertPermission({
+                'type': 'anyone',
+                'value': 'anyone',
+                'role': 'writer'})
+            print(folder['alternateLink'])
 
-    def after_login(self, **qwargs):
-        self.manager.transition = SlideTransition(direction="left")
-        self.manager.current = 'clients'
-        self.hide_login_progress()
+            gs = gspread.service_account(filename='fileapi.json')
+            sht = gs.open_by_key(f'{file_id}')
+            worksheet1 = sht.add_worksheet(title="Клиенты", rows="200", cols="8")
+            worksheet1.update('A1:H1', [["Идентификатор клиента",
+                                         "Дата регистации",
+                                         "Фамилия",
+                                         "Имя",
+                                         "Отчество",
+                                         "Номер телефона",
+                                         "Количество абонементов",
+                                         "Дата покупки последенго абонемента"]])
+
+            worksheet2 = sht.add_worksheet(title="Абонементы", rows="200", cols="7")
+            worksheet2.update('A1:G1', [["Идентификатор абонемента",
+                                         "Идентификатор клиента",
+                                         "Дата создания",
+                                         "Цена абонемента",
+                                         "Количесво занятий",
+                                         "Пройденных занятий",
+                                         "Дата и время последней тренировки"]])
+
+            worksheet3 = sht.add_worksheet(title="Тренировки", rows="200", cols="3")
+            worksheet3.update('A1:C1', [["Идентификатор тренировки",
+                                         "Идентификатор абонемента",
+                                         "Дата и время тренировки"],
+                                        ])
+            worksheet = sht.sheet1
+            sht.del_worksheet(worksheet)
+
+            worksheet1.format('A1:H200', {'wrapStrategy': 'LEGACY_WRAP'})
+            worksheet2.format('A1:G200', {'wrapStrategy': 'LEGACY_WRAP'})
+            worksheet3.format('A1:C200', {'wrapStrategy': 'LEGACY_WRAP'})
 
 
-    def error_listener(self, **qwargs):
-        pass
+            print('Код выполнен успешно')
+            self.manager.current = 'clients'
+            return {emaill: file['id']}
+        else:
+            self.manager.current = 'clients'
