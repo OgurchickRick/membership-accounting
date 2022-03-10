@@ -13,7 +13,7 @@ class MembershipAccounting(App):
     def build(self):
         sm = ScreenManager()
 
-        if os.path.getsize('../membership/credentials.json') == 0:
+        if os.path.getsize('credentials.json') == 0:
             Builder.load_file(os.path.join(os.getcwd(), 'designs', 'welcome.kv'))
             sm.add_widget(Welcome(name='welcome'))
 

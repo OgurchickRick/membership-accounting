@@ -73,5 +73,6 @@ class Welcome(Screen):
             print('Код выполнен успешно')
             self.manager.current = 'clients'
             return {emaill: file['id']}
+
         else:
             self.manager.current = 'clients'
